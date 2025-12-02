@@ -18,20 +18,17 @@ No authentication is required (intentionally public for evaluation).
 ## Architecture Diagram (JSON + TXT Paths Merge)
 
 ```mermaid
-graph LR
-  subgraph Clients
-    J[JSON client\nContent-Type: application/json]
-    T[Text client\nContent-Type: text/plain\nX-Tenant-ID header]
-  end
+flowchart TD
+  client[Client / Chaos Script]
+  ingest[HTTP Cloud Function<br/>ingest_function.ingest]
+  topic[Pub/Sub Topic<br/>logs-topic]
+  worker[Worker Cloud Function<br/>worker_function.process_log]
+  firestore[Firestore<br/>Native multi-tenant storage]
 
-  J -->|"POST /ingest"| I[HTTP Cloud Function\ningest_function.ingest]
-  T -->|"POST /ingest"| I
-
-  I -->|"Publish to Pub/Sub\n(data = text,\nattrs = tenant_id, log_id, source)"| P[Pub/Sub topic\nlogs-topic]
-
-  P -->|"messagePublished trigger"| W[Worker Cloud Function\nworker_function.process_log]
-
-  W -->|"Write\n tenants/{tenant_id}/processed_logs/{log_id}"| F[Firestore\nMulti-tenant storage]
+  client --> ingest
+  ingest -->|"Publish log message<br/>with tenant_id & log_id"| topic
+  topic -->|"Pub/Sub messagePublished event"| worker
+  worker -->|"Write processed log<br/>to tenants/{tenant_id}/processed_logs/{log_id}"| firestore
 ```
 
 **Key idea:** both **JSON** and **TXT** requests are normalized into the **same Pub/Sub message format**:
@@ -142,5 +139,21 @@ Together, this architecture:
 - Keeps the `/ingest` API responsive under a **1,000 RPM chaos test**.
 - Ensures work is retried safely if the worker crashes mid-process.
 - Preserves strict tenant separation at the storage layer.
+
+---
+
+## Technologies Used
+
+- **Backend & Cloud**
+  - **GCP Cloud Functions (Gen2)** – HTTP function for `/ingest` and Pub/Sub–triggered worker.
+  - **GCP Pub/Sub** – managed message broker / queue.
+  - **GCP Firestore (Native mode)** – multi-tenant NoSQL storage.
+- **Language & SDKs**
+  - **Python 3.11** – runtime for both functions.
+  - **google-cloud-pubsub** – Pub/Sub client in `ingest_function`.
+  - **google-cloud-firestore** – Firestore client in `worker_function`.
+- **Tooling**
+  - **Google Cloud SDK (`gcloud`)** – deployment and configuration.
+  - **hey** – load testing (`~500 req/s` JSON and text chaos tests).
 
 
