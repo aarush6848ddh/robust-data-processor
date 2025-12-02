@@ -6,6 +6,19 @@ The system ingests both **JSON** and **raw text** logs via a single `/ingest` en
 
 ---
 
+## Technologies Used
+
+<p align="center">
+  <img src="https://img.shields.io/badge/Python-3.11-3776AB?style=for-the-badge&logo=python&logoColor=white" />
+  <img src="https://img.shields.io/badge/GCP-Cloud%20Functions-4285F4?style=for-the-badge&logo=googlecloud&logoColor=white" />
+  <img src="https://img.shields.io/badge/GCP-Pub%2FSub-8E24AA?style=for-the-badge&logo=googlecloud&logoColor=white" />
+  <img src="https://img.shields.io/badge/GCP-Firestore-FFCA28?style=for-the-badge&logo=firebase&logoColor=black" />
+  <img src="https://img.shields.io/badge/Google%20Cloud%20SDK-gcloud-4285F4?style=for-the-badge&logo=googlecloud&logoColor=white" />
+  <img src="https://img.shields.io/badge/Load%20Testing-hey-orange?style=for-the-badge" />
+</p>
+
+---
+
 ## Live Endpoint
 
 - **HTTP POST /ingest**  
@@ -139,21 +152,4 @@ Together, this architecture:
 - Keeps the `/ingest` API responsive under a **1,000 RPM chaos test**.
 - Ensures work is retried safely if the worker crashes mid-process.
 - Preserves strict tenant separation at the storage layer.
-
----
-
-## Technologies Used
-
-- **Backend & Cloud**
-  - **GCP Cloud Functions (Gen2)** – HTTP function for `/ingest` and Pub/Sub–triggered worker.
-  - **GCP Pub/Sub** – managed message broker / queue.
-  - **GCP Firestore (Native mode)** – multi-tenant NoSQL storage.
-- **Language & SDKs**
-  - **Python 3.11** – runtime for both functions.
-  - **google-cloud-pubsub** – Pub/Sub client in `ingest_function`.
-  - **google-cloud-firestore** – Firestore client in `worker_function`.
-- **Tooling**
-  - **Google Cloud SDK (`gcloud`)** – deployment and configuration.
-  - **hey** – load testing (`~500 req/s` JSON and text chaos tests).
-
 
