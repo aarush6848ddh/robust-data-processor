@@ -4,7 +4,7 @@ This repository contains a A high-concurrency REST API for ingesting massive, un
 
 The system ingests both **JSON** and **raw text** logs via a single `/ingest` endpoint, normalizes them into a unified internal text stream, processes them asynchronously, and stores results in **Firestore** with strict tenant isolation.
 
-GCP Cloud Run serverless service is being used to deploy the Ingest Rest and Event Process services, which allow to run conatiners without managing any servers, offering cost saving by automatically scaling down to zero when idle. It is very flexible that supports any language or framework packaged in a container and provides fast autoscaling and robust traffic management features for deployments and rollbacks.
+GCP Cloud Run serverless service is being used to deploy the Ingest Rest and Event Process services, which allows the runbing of conatiners without managing any servers, offering cost saving by automatically scaling down to zero when idle. It is very flexible that supports any language or framework packaged in a container and provides fast autoscaling and robust traffic management features for deployments and rollbacks.
 
 ## Features
 - **Single /ingest endpoint**
