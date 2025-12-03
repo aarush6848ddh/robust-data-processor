@@ -1,3 +1,23 @@
+"""
+Pub/Sub worker Cloud Function for the Robust Data Processor pipeline.
+
+Responsibilities:
+  - Consume normalized text log messages from Pub/Sub.
+  - Simulate CPU‑bound work by sleeping 0.05s per character of text
+    (capped to keep within the function timeout).
+  - Perform very simple PII redaction (phone‑like patterns).
+  - Persist the processed log into Firestore using a **tenant‑isolated**
+    and **idempotent** document key:
+
+        tenants/{tenant_id}/processed_logs/{log_id}
+
+Notes:
+  - Tenant isolation: `tenant_id` is always part of the Firestore path,
+    so data for different tenants never shares a flat collection.
+  - Idempotency: `log_id` is the document ID; reprocessing the same
+    message overwrites the same document instead of creating duplicates.
+"""
+
 import base64
 import os
 import re
@@ -20,8 +40,11 @@ def _get_db() -> firestore.Client:
 
 def _redact_sensitive(text: str) -> str:
     """
-    Very simple PII redaction for demonstration:
-    - Redact patterns that look like phone numbers (e.g., 555-0199 or 555-123-4567).
+    Very simple PII redaction for demonstration only.
+
+    Currently:
+      - Redacts 7‑digit patterns like 555-0199.
+      - Redacts 10‑digit patterns like 555-123-4567.
     """
     # 7-digit pattern like 555-0199
     text = re.sub(r"\b\d{3}-\d{4}\b", "[REDACTED]", text)
@@ -31,7 +54,7 @@ def _redact_sensitive(text: str) -> str:
 
 
 def _simulate_heavy_processing(text: str) -> None:
-    # Sleep 0.05s per character
+    """Sleep for 0.05s per character (capped) to simulate CPU‑bound work."""
     delay_per_char = float(os.environ.get("DELAY_PER_CHAR", "0.05"))
     total_sleep = delay_per_char * len(text)
     # Cap the sleep time so we never exceed the Cloud Function timeout in extreme cases
@@ -43,11 +66,24 @@ def process_log(event: Dict[str, Any], context: Any) -> None:
     """
     Pub/Sub-triggered Cloud Function worker.
 
-    It receives normalized text logs published by the ingest function,
-    simulates heavy processing, and writes the result into Firestore using
-    a tenant-isolated document path:
+    Input:
+      - `event["data"]`: base64‑encoded text log (normalized by the ingest function).
+      - `event["attributes"]`: should include:
+          * `tenant_id` – which tenant owns this log.
+          * `log_id`    – idempotent key for the processed log document.
+          * `source`    – "json_upload" or "text_upload" (optional).
 
-        tenants/{tenant_id}/processed_logs/{log_id}
+    Behaviour:
+      1. Decode the text from base64.
+      2. Validate that `tenant_id` and `log_id` are present; if not, raise so
+         that Pub/Sub retries instead of writing ambiguous data.
+      3. Simulate heavy CPU work via `_simulate_heavy_processing`.
+      4. Redact simple phone‑like patterns.
+      5. Write the result into Firestore at:
+
+             tenants/{tenant_id}/processed_logs/{log_id}
+
+         Using this path enforces tenant isolation and idempotency.
     """
     message_data = event.get("data", "")
     attributes = event.get("attributes") or {}

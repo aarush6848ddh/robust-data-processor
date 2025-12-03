@@ -1,3 +1,19 @@
+"""
+Unified ingestion HTTP Cloud Function for the Robust Data Processor task.
+
+Responsibilities:
+  - Expose a single public `/ingest` endpoint.
+  - Accept both JSON (`application/json`) and raw text (`text/plain`) requests.
+  - Normalize all inputs into a **flat text** representation.
+  - Attach tenant and log metadata as Pub/Sub message attributes.
+  - Publish to a Pub/Sub topic and return **202 Accepted** immediately
+    (no heavy work or database access here).
+
+This function is intentionally very small and fast so it can sustain high
+request rates (1,000+ RPM). All CPU‑bound work and Firestore writes happen
+in the Pub/Sub worker.
+"""
+
 import json
 import os
 import uuid
@@ -40,6 +56,16 @@ def _get_topic_path() -> str:
 
 
 def _normalize_json(request) -> Dict[str, Any]:
+    """
+    Normalize a JSON payload into the internal representation.
+
+    Expected JSON body:
+        {
+          "tenant_id": "acme",
+          "log_id": "optional-id",  # optional, UUID generated if omitted
+          "text": "User 555-0199 accessed..."
+        }
+    """
     data = request.get_json(silent=True)
     if data is None:
         raise BadRequest("Invalid JSON body")
@@ -62,6 +88,14 @@ def _normalize_json(request) -> Dict[str, Any]:
 
 
 def _normalize_text(request) -> Dict[str, Any]:
+    """
+    Normalize a raw text payload into the internal representation.
+
+    Expected headers / body:
+      - Content-Type: text/plain
+      - X-Tenant-ID: <tenant_id>
+      - Body: arbitrary text (e.g. log file snippet)
+    """
     tenant_id = request.headers.get("X-Tenant-ID")
     if not tenant_id:
         raise BadRequest("Header 'X-Tenant-ID' is required for text/plain payloads")
@@ -88,8 +122,9 @@ def _publish(normalized: Dict[str, Any]) -> None:
     topic_path = _get_topic_path()
 
     # Unified internal, flat text format:
-    # - Message data: raw text (string) from either JSON or text upload
+    # - Message data: raw text (string) from either JSON or text upload.
     # - Attributes: minimal metadata for downstream processing
+    #   (tenant isolation and idempotent keys are handled by the worker).
     data_bytes = normalized["text"].encode("utf-8")
     publisher.publish(
         topic_path,
@@ -106,10 +141,24 @@ def _make_response(body: Dict[str, Any], status_code: int) -> Tuple[str, int, Di
 
 def ingest(request):
     """
-    HTTP Cloud Function entrypoint for the unified /ingest endpoint.
+    HTTP Cloud Function entrypoint for the unified `/ingest` endpoint.
 
-    This function is designed to be fronted directly (public HTTPS) or via API Gateway.
-    It is non-blocking: it validates/normalizes the input and enqueues work to Pub/Sub.
+    Behaviour:
+      - Only allows POST requests (returns 405 for others).
+      - Dispatches based on Content-Type:
+          * application/json → `_normalize_json`
+          * text/plain      → `_normalize_text`
+      - Publishes a normalized message to Pub/Sub using `_publish`.
+      - Returns a small JSON payload with `status`, `tenant_id` and `log_id`
+        with HTTP status **202 Accepted**.
+
+    This function deliberately does not:
+      - Sleep or perform CPU‑heavy work.
+      - Talk to Firestore or any other database.
+      - Block on Pub/Sub publish futures.
+
+    All of that work is delegated to the Pub/Sub worker so that this
+    endpoint can remain fast and resilient under high load.
     """
     try:
         if request.method != "POST":
