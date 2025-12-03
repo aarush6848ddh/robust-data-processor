@@ -1,9 +1,17 @@
-## Robust Multi-Tenant Log Processor (GCP)
+## Robust Event Deriven, Multi-Tenant Message Processor
 
-This repository contains a **serverless, multi-tenant log ingestion pipeline** implemented on **Google Cloud Platform** for the “Robust Data Processor” backend task.
+This repository contains a A high-concurrency REST API for ingesting massive, unstructured logs from diverse sources with tenant isolation. Implments an event-deriven architecture using GCP Cloud Run, Pub-Sub Topic and Firestore DB. 
 
 The system ingests both **JSON** and **raw text** logs via a single `/ingest` endpoint, normalizes them into a unified internal text stream, processes them asynchronously, and stores results in **Firestore** with strict tenant isolation.
 
+## Features
+- **Single /ingest endpoint**
+- **Tenant Isolation**
+- **Asynchronous Processing**
+- **Robustness**
+- **Event-Deriven Pipeline**
+- **GCP Pub-Sub Message Broker**
+- **GCP Firestore DB**  
 ---
 
 ## Technologies Used
